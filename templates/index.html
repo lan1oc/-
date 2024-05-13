@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="msapplication-TileColor" content="#21a366">
+    <meta name="theme-color" content="#ffffff">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>跨时代的操作系统（估值10个亿）</title>
+    <link href="/static/chat/xterm.min.css" rel="stylesheet">
+    <script src="/static/chat/xterm.min.js"></script>
+    <script src="/static/chat/local-echo.min.js"></script>
+    <script src="/static/chat/xterm-addon-fit.min.js"></script>
+    <style>
+        ::selection {
+            background-color: rgba(255, 255, 255, .25)
+        }
+
+        body {
+            background-color: #23272e;
+            padding: 0;
+            margin: 0
+        }
+
+        .xterm {
+            padding: 8px
+        }
+
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+            background-color: transparent
+        }
+
+        *::-webkit-scrollbar-track {
+            border-radius: 8px;
+            background-color: transparent
+        }
+
+        *::-webkit-scrollbar-button {
+            width: 0;
+            height: 0;
+            display: none
+        }
+
+        *::-webkit-scrollbar-thumb {
+            border-radius: 8px;
+            background-color: #4e566660
+        }
+
+        *:hover::-webkit-scrollbar-thumb {
+            background-color: #5a637580
+        }
+    </style>
+</head>
+<body>
+<div id="terminal" style="height: 100vh;"></div>
+<script>
+    (async function() {
+            const ctx = this
+                , _ORI_TITLE = document.title;
+            function sleep(e) {
+                return new Promise((t=>setTimeout(t, e)))
+            }
+            class Replacement {
+                constructor(e) {
+                    this._str = e,
+                        this._arr = [e]
+                }
+                replace(e, t) {
+                    let n = []
+                        , r = !1;
+                    const o = "string" == typeof e ? e.replaceAll(/[\^\$\.\*\+\?\(\)\[\]\{\}\|\\\/]/g, "\\$&") : e;
+                    return this._arr.forEach((l=>{
+                            if ("string" != typeof l)
+                                return n.push(s);
+                            let _ = l.match(o);
+                            if (null === _)
+                                return n.push(l);
+                            r = !0,
+                                n.push(l.substring(0, _.index)),
+                                n.push({
+                                    search: e,
+                                    src: _[0],
+                                    dst: t
+                                }),
+                                n.push(l.substring(_.index + _[0].length))
+                        }
+                    )),
+                        this._arr = n,
+                        r
+                }
+                replaceAll(e, t) {
+                    let n = []
+                        , r = !1;
+                    const o = "string" == typeof e ? e.replaceAll(/[\^\$\.\*\+\?\(\)\[\]\{\}\|\\\/]/g, "\\$&") : e;
+                    return this._arr.forEach((l=>{
+                            if ("string" != typeof l)
+                                return n.push(l);
+                            for (; ; ) {
+                                let _ = l.match(o);
+                                if (null === _)
+                                    return n.push(l);
+                                r = !0,
+                                    n.push(l.substring(0, _.index)),
+                                    n.push({
+                                        search: e,
+                                        src: _[0],
+                                        dst: t
+                                    }),
+                                    l = l.substring(_.index + _[0].length)
+                            }
+                        }
+                    )),
+                        this._arr = n,
+                        r
+                }
+                apply() {
+                    let e = "";
+                    return this._arr.forEach((t=>{
+                            e += "string" == typeof t ? t : t.dst
+                        }
+                    )),
+                        this._str = e
+                }
+                restore() {
+                    let e = "";
+                    return this._arr.forEach((t=>{
+                            e += "string" == typeof t ? t : t.src
+                        }
+                    )),
+                        this._str = e
+                }
+                output() {
+                    return this._str
+                }
+            }
+            class Subprocess {
+                constructor(e, t, n) {
+                    this.info = {
+                        input: e,
+                        cmd: t,
+                        argv: n
+                    },
+                        this._EVENT_POOL = {}
+                }
+                on(e, t) {
+                    "string" != typeof e && (e = e.type),
+                        Object.hasOwnProperty.call(this._EVENT_POOL, e) ? this._EVENT_POOL[e].push(t) : this._EVENT_POOL[e] = [t]
+                }
+                off(e, t) {
+                    "string" != typeof e && (e = e.type),
+                    Object.hasOwnProperty.call(this._EVENT_POOL, e) && (this._EVENT_POOL[e] = this._EVENT_POOL[e].filter((e=>e !== t)))
+                }
+                once(e, t) {
+                    const n = (r,...o)=>{
+                            this.off(e, n),
+                                t(r, ...o)
+                        }
+                    ;
+                    this.on(e, n)
+                }
+                emit(e, ...t) {
+                    if (Object.hasOwnProperty.call(this._EVENT_POOL, e)) {
+                        const n = "string" == typeof e ? new Event(e) : e;
+                        this._EVENT_POOL[e].forEach((e=>e(n, ...t)))
+                    }
+                }
+            }
+            function splitCmdLine(e) {
+                let t = []
+                    , n = ""
+                    , r = 0
+                    , o = 0;
+                e += " ";
+                for (let l = 0; l < e.length; l++) {
+                    let _ = e[l];
+                    if ("'" === _)
+                        o % 2 == 0 ? r++ : n += _;
+                    else if ('"' === _)
+                        r % 2 == 0 ? o++ : n += _;
+                    else if (" " === _)
+                        if (r % 2 == 0 && o % 2 == 0) {
+                            if ("" === n)
+                                continue;
+                            t.push(n),
+                                n = ""
+                        } else
+                            n += _;
+                    else
+                        n += _
+                }
+                return t
+            }
+            function formatPath(t, n) {
+                return (t = t.trim()).startsWith(n) && (t = ("/" === n.slice(-1) ? "~/" : "~") + t.substring(n.length)),
+                "/" === t.slice(-1) && t.length > 1 && (t = t.substring(0, t.length - 1)),
+                    t
+            }
+            function date() {
+                const e = (new Date).toString().split(" ");
+                return [e[0], e[1], e[2], e[4], e[3]].join(" ")
+            }
+            function remoteIP() {
+                return "10.68.68.206"
+            }
+            const path = {
+                _getStorage: function(e) {
+                    e = path.resolve(ctx.__dirname, e).substring(1);
+                    let t = {
+                        type: "dir",
+                        name: "",
+                        msg: void 0,
+                        data: STORAGE
+                    }
+                        , n = e.split("/");
+                    for (const e of n)
+                        if ("" === e)
+                            t.name += "/";
+                        else {
+                            if (!Object.hasOwnProperty.call(t.data, e))
+                                return {
+                                    type: "error",
+                                    name: t.name + "/" + e,
+                                    msg: "No such file or directory",
+                                    data: null
+                                };
+                            t.name += "/" + e,
+                                t.data = t.data[e]
+                        }
+                    return "/" === t.name[t.name.length - 1] && "string" == typeof t.data ? {
+                        type: "error",
+                        name: t.name,
+                        msg: "Not a directory",
+                        data: null
+                    } : ("/" !== t.name[t.name.length - 1] && (t.type = "file"),
+                        t)
+                },
+                resolve: function(...e) {
+                    let t = (e = e.map((e=>(e = e.trim()).startsWith("~") ? ctx.__homepath + e.substring(1) : e))).reverse();
+                    e = [],
+                        t.some((t=>(e.unshift(t),
+                            t.startsWith("/"))));
+                    let n = e.join("/");
+                    n.startsWith("/") || (n = ctx.__dirname + "/" + n),
+                        n = n.replaceAll(/\/+/g, "/").substring(1);
+                    let r = n.split("/")
+                        , o = "";
+                    for (const e of r)
+                        if (".." === e)
+                            o = o.substring(0, o.lastIndexOf("/"));
+                        else {
+                            if ("." === e)
+                                continue;
+                            o += "/" + e
+                        }
+                    return "" === o && (o = "/"),
+                        o
+                },
+                list: function(e) {
+                    e = path.resolve(ctx.__dirname, e + "/");
+                    const t = path._getStorage(e);
+                    if ("error" === t.type)
+                        return {
+                            type: "error",
+                            msg: t.msg,
+                            data: []
+                        };
+                    let n = [];
+                    for (const e in t.data)
+                        if (Object.hasOwnProperty.call(t.data, e)) {
+                            "string" == typeof t.data[e] ? n.push({
+                                type: "file",
+                                name: e
+                            }) : n.push({
+                                type: "dir",
+                                name: e
+                            })
+                        }
+                    return {
+                        type: "success",
+                        data: n
+                    }
+                },
+                exist: function(e) {
+                    let t = (e = path.resolve(ctx.__dirname, e).substring(1)).split("/")
+                        , n = STORAGE;
+                    for (const e of t)
+                        if ("" !== e) {
+                            if (!Object.hasOwnProperty.call(n, e))
+                                return !1;
+                            n = n[e]
+                        }
+                    return !0
+                },
+                existFile: function(e) {
+                    let t = (e = path.resolve(ctx.__dirname, e).substring(1)).split("/")
+                        , n = STORAGE;
+                    for (const e of t)
+                        if ("" !== e) {
+                            if (!Object.hasOwnProperty.call(n, e))
+                                return !1;
+                            n = n[e]
+                        }
+                    return "string" == typeof n
+                },
+                existDir: function(e) {
+                    let t = (e = path.resolve(ctx.__dirname, e).substring(1)).split("/")
+                        , n = STORAGE;
+                    for (const e of t)
+                        if ("" !== e) {
+                            if (!Object.hasOwnProperty.call(n, e))
+                                return !1;
+                            n = n[e]
+                        }
+                    return "object" == typeof n
+                }
+            }
+                , term = new Terminal({
+                convertEol: !0,
+                disableStdin: !1,
+                cursorBlink: !0,
+                theme: {
+                    foreground: "#dcdfe4",
+                    background: "#23272e",
+                    cursor: "#dcdfe4",
+                    cursorAccent: "#23272e",
+                    selectionBackground: "#abb2bf30",
+                    black: "#3f4451",
+                    red: "#e05561",
+                    green: "#8cc265",
+                    yellow: "#d18f52",
+                    blue: "#4aa5f0",
+                    magenta: "#c162de",
+                    cyan: "#42b3c2",
+                    white: "#dcdfe4",
+                    brightBlack: "#4f5666",
+                    brightRed: "#ff616e",
+                    brightGreen: "#a5e075",
+                    brightYellow: "#f0a45d",
+                    brightBlue: "#4dc4ff",
+                    brightMagenta: "#de73ff",
+                    brightCyan: "#4cd1e0",
+                    brightWhite: "#dcdfe4"
+                },
+                fontSize: 16,
+                fontFamily: "'Cascadia Mono', ourier-new, courier, monospace",
+                allowProposedApi: !0
+            })
+                , fitAddon = new FitAddon.FitAddon;
+            term.loadAddon(fitAddon),
+                term.open(document.getElementById("terminal")),
+                fitAddon.fit(),
+                window.addEventListener("resize", (()=>{
+                        fitAddon.fit()
+                    }
+                ));
+            const LEOptions = {
+                historySize: 100,
+                maxAutocompleteEntries: 100
+            }
+                , localEcho = new LocalEchoController(term,LEOptions)
+                , le = localEcho;
+            term.loadAddon(localEcho);
+            let CommandPool = {}
+                , SubprocessPool = [];
+            const Status = {
+                ConnectionAlive: !0
+            };
+            let SSH_HOST = "ZWU"
+                , env = {
+                SHELL: "/bin/bash",
+                USER: "lan1oc",
+                HOSTNAME: "HACKER",
+                HOME: "/home/lan1oc",
+                PWD: "/home/lan1oc",
+                OS_NAME: "openStar",
+                OS_RELEASE: "3.14.15-1-amd64 #1",
+                OS_VERSION: "1.14.514-1 (2023-08-08)",
+                OS_ARCH: "x86_64",
+                PATH: "/bin"
+            }
+                , STORAGE = {
+                home: {
+                    "123456": {},
+                    "admin": {}
+                },
+                bin: {
+                    bash: "BINNGGYU exec:cmd:bashEND",
+                    ls: "BINNGGYU exec:cmd:lsEND",
+                    cd: "BINNGGYU exec:cmd:cdEND",
+                    cat: "BINNGGYU exec:cmd:catEND",
+                    clear: "BINNGGYU exec:cmd:clearEND",
+                    pwd: "BINNGGYU exec:cmd:pwdEND",
+                    echo: "BINNGGYU exec:cmd:echoEND",
+                    exit: "BINNGGYU exec:cmd:exitEND",
+                    chat: "BINNGGYU exec:cmd:chatEND",
+                    login: "BINNGGYU exec:cmd:loginEND",
+                    register: "BINNGGYU exec:cmd:registerEND",
+                    ifconfig: "BINNGGYU exec:cmd:ifconfigEND"
+                }
+            };
+            Object.defineProperty(this, "PROMPT", {
+                get: function() {
+                    return `[32m${env.USER}@${env.HOSTNAME}[0m:[34m${formatPath(env.PWD, env.HOME)}[0m# `
+                }
+            }),
+                Object.defineProperty(this, "__homepath", {
+                    get: function() {
+                        return env.HOME
+                    }
+                }),
+                Object.defineProperty(this, "__dirname", {
+                    get: function() {
+                        return env.PWD
+                    }
+                });
+            let WELCOME_TEXT = `Linux ${env.HOSTNAME} ${env.OS_RELEASE} SMP ${env.OS_NAME} ${env.OS_VERSION} ${env.OS_ARCH} GNU/Linux\n\nWelcome to ZWU Elastic Compute Service !\n\n\t ___   _   _   _  _      _  _    __     ___  _  __  ___   ___\n\t|_  | | | | | | || |    | || |  /  \\   / _/ | |/ / | __| | _ \\\n\t / /  | 'V' | | \\/ | __ | >< | | /\\ | | \\__ |   <  | _|  | v /\n\t|___| !_/ \\_!  \\__/  \\/ |_||_| |_||_|  \\__/ |_|\\_\\ |___| |_|_\\\n\nLast access: ${date()} from ${remoteIP()}\n\nlogin or register？`;
+            const HistoryController = le.history.__proto__.constructor;
+            function setTitle(e) {
+                document.title = e
+            }
+            function recTitle() {
+                document.title = _ORI_TITLE
+            }
+            async function readInput(e=Status) {
+                e.ConnectionAlive && localEcho.read(ctx.PROMPT).then((e=>execInput(e))).then(readInput.bind(this, e))
+            }
+            function autoCompleteFiles(e, t) {
+                const n = e === t.length - 1 && t[t.length - 1] || "";
+                if (0 === e && (null == n || !n.length))
+                    return [];
+                if (0 == e && !/^(\/+|\.\.?(\/|$))/.test(n))
+                    return [];
+                if (/^\.\.?$/.test(n))
+                    return [n + "/"];
+                const r = n.substring(0, n.lastIndexOf("/") + 1)
+                    , o = n.substring(n.lastIndexOf("/") + 1)
+                    , l = path.list(path.resolve(env.PWD, r))
+                    , _ = /(^$)|(\/$)/.test(r) ? r : r + "/";
+                return "error" === l.type ? [] : l.data.filter((e=>e.name.startsWith(o))).map((e=>_ + ("file" === e.type ? e.name : e.name + "/")))
+            }
+            function autoCompletePath(e, t) {
+                const n = e === t.length - 1 && t[t.length - 1] || "";
+                if (e > 0)
+                    return [];
+                if (null == n || !n.length)
+                    return [];
+                if (0 == t.length)
+                    return [];
+                return env.PATH.split(":").map((e=>{
+                        const t = path.list(e);
+                        return "error" === t.type ? [] : t.data.filter((e=>"file" === e.type)).map((e=>e.name))
+                    }
+                )).flat()
+            }
+            function applyAutoComplete(e=localEcho) {
+                e.addAutocompleteHandler(autoCompletePath),
+                    e.addAutocompleteHandler(autoCompleteFiles)
+            }
+            function cancelAutoComplete(e=localEcho) {
+                e.removeAutocompleteHandler(autoCompletePath),
+                    e.removeAutocompleteHandler(autoCompleteFiles)
+            }
+            async function execInput(input) {
+                const [cmd,...argv] = splitCmdLine(input);
+                if ("" === (cmd || "").trim())
+                    return;
+                let cmdpaths = [];
+                cmdpaths = /^(\/+|\.\.?(\/|$))/g.test(cmd) ? [path.resolve(ctx.__dirname, cmd)] : env.PATH.split(":").map((e=>path.resolve(e, cmd)));
+                let error_msg = "Command not found";
+                for (const cmdpath of cmdpaths) {
+                    const st = path._getStorage(cmdpath);
+                    if ("error" === st.type) {
+                        error_msg = st.msg;
+                        continue
+                    }
+                    if ("dir" === st.type) {
+                        error_msg = "Is a directory";
+                        continue
+                    }
+                    const textContent = st.data
+                        , lauchInfo = /^\x01BIN\x02NGGYU ([^ ]+):([^ ]+):([^ ]+)\x03END\x04$/.exec(textContent);
+                    null === lauchInfo && le.printError(cmd, "cannot execute binary file", "Exec format error.");
+                    const [,type,zone,value] = lauchInfo;
+                    if ("exec" === type) {
+                        if ("cmd" === zone)
+                            return execCmd(value, argv)
+                    } else if ("extern" === type && "func" === zone)
+                        return await eval(`${value}(${input})`);
+                    return le.printError(cmd, "cannot execute binary file", "Exec format error.")
+                }
+                return le.printError(cmd, error_msg)
+            }
+            async function execCmd(e, t=[]) {
+                "string" == typeof t && (t = splitCmdLine(t)),
+                    t = t.map((e=>e.trim()));
+                let n = ""
+                    , r = !1;
+                for (let t = 0; t < e.length; t++) {
+                    let o = e[t];
+                    if (r && " " === o)
+                        break;
+                    " " !== o && (r = !0,
+                        n += o)
+                }
+                if (Object.hasOwnProperty.call(CommandPool, n)) {
+                    let r = splitCmdLine(e);
+                    r.shift(),
+                        r = r.concat(t);
+                    const o = new Subprocess(e,n,r);
+                    SubprocessPool.push(o),
+                        cancelAutoComplete();
+                    const l = le.history;
+                    le.history = new HistoryController(LEOptions.historySize);
+                    const _ = await CommandPool[n].call(o, e, n, r, le.print, execCmd);
+                    return le.history = l,
+                        applyAutoComplete(),
+                        SubprocessPool.pop(),
+                        _
+                }
+                {
+                    const r = new Subprocess(e,n,_argv);
+                    SubprocessPool.push(r),
+                        cancelAutoComplete();
+                    const o = le.history;
+                    le.history = new HistoryController(LEOptions.historySize);
+                    const l = await le._fallbackAction.call(r, e, n, t, le.print, execCmd);
+                    return le.history = o,
+                        applyAutoComplete(),
+                        SubprocessPool.pop(),
+                        l
+                }
+            }
+            function logout() {
+                window.location.replace("/logout.php")
+            }
+            le.pushInput = e=>{
+                le.setInput(le.getInput() + e),
+                    le.setCursor(le.getCursorPos() + e.length)
+            }
+                ,
+                le.getCursorPos = ()=>le._cursor,
+                le.getInput = ()=>le._input,
+                le.confirm = ()=>le.handleReadComplete(),
+                le.preventNextDataHandler = ()=>{
+                    const e = le.handleData;
+                    le.handleData = ()=>{
+                        le.handleData = e
+                    }
+                }
+                ,
+                le.printError = (...e)=>{
+                    let t = [];
+                    e.forEach((e=>Array.isArray(e) ? t.push(...e) : t.push(e)));
+                    const n = env.SHELL.split("/").pop();
+                    le.println([`-${n}`, ...t].join(": "))
+                }
+                ,
+                le.register = (e,t)=>(CommandPool[e.trim()] = t || async function(e, t, n, r, o) {}
+                    ,
+                    le),
+                le._fallbackAction = async function(e, t, n, r, o) {
+                    "" !== t.trim() && le.println(`Command '${t}' not found.`)
+                }
+                ,
+                term.onKey((e=>{
+                        if (e.domEvent.ctrlKey && "c" === e.domEvent.key)
+                            term.hasSelection() && (document.execCommand("copy"),
+                                term.clearSelection(),
+                                le.preventNextDataHandler());
+                        else if (Status.ConnectionAlive)
+                            return e.domEvent.ctrlKey && "u" === e.domEvent.key ? (le.setInput(""),
+                                void le.setCursor(0)) : e.domEvent.ctrlKey && "d" === e.domEvent.key ? 0 === le.getInput().length ? (le.println(""),
+                                SubprocessPool.length ? SubprocessPool[SubprocessPool.length - 1].emit("exit") : execCmd("exit")) : void le.handleData("[3~") : void 0
+                    }
+                )),
+                le.register("clear", (function(e, t, n, r, o) {
+                        term.clear()
+                    }
+                )).register("bash", (function(e, t, n, r, o) {
+                        return new Promise(((e,t)=>{
+                                const n = {
+                                    pwd: env.PWD,
+                                    history: le.history
+                                }
+                                    , r = {
+                                    ConnectionAlive: !0
+                                };
+                                this.once("exit", (t=>{
+                                        le.println("exit"),
+                                            env.PWD = n.pwd,
+                                            le.history = n.history,
+                                            r.ConnectionAlive = !1,
+                                            cancelAutoComplete(),
+                                            e()
+                                    }
+                                )),
+                                    applyAutoComplete(),
+                                    le.history = new HistoryController(LEOptions.historySize),
+                                    readInput(r)
+                            }
+                        ))
+                    }
+                )).register("exit", (function(e, t, n, r, o) {
+                        le.println("Logout"),
+                            le.println(`Connection to ${SSH_HOST} closed.`),
+                            le.detach(),
+                            Status.ConnectionAlive = !1,
+                            setTimeout(logout, 1e3)
+                    }
+                )).register("login", (function(e, t, n, r, o) {
+                        le.println("ok")
+                        window.location.href = "/login";
+                    }
+                )).register("register", (function(e, t, n, r, o) {
+                        le.println("ok")
+                        window.location.href = "/register";
+                    }
+                )).register("pwd", function(n, i, r, t, e) {
+                    le.println(env.PWD)
+                }).register("echo", (function(e, t, n, r, o) {
+                        le.println(n.join(" "))
+                    }
+                )).register("ls", (function(e, t, n, r, o) {
+                        0 === n.length && n.push(env.PWD);
+                        for (let e = 0; e < n.length; e++) {
+                            const r = n[e]
+                                , o = path.list(r);
+                            if (e >= 1 && le.println(""),
+                            "error" === o.type) {
+                                le.printError(t, r, o.msg);
+                                continue
+                            }
+                            const l = e=>"[34m" + e + "[0m"
+                                , _ = e=>"[37m" + e + "[0m";
+                            o.data = o.data.map((e=>"dir" === e.type ? l(e.name) : _(e.name))),
+                            n.length > 1 && le.println(r + ":"),
+                            o.data.length && le.printWide(o.data)
+                        }
+                    }
+                )).register("cd", (function(e, t, n, r, o) {
+                        if (0 === n.length)
+                            return env.PWD = env.HOME;
+                        if (n.length > 1)
+                            return le.printError(t, "too many arguments");
+                        const l = n[0];
+                        path.existDir(l) ? (env.PWD = path.resolve(env.PWD, l),
+                        "/" === env.PWD.slice(-1) && env.PWD.length > 1 && (env.PWD = env.PWD.substring(0, env.PWD.length - 1))) : le.printError(t, l, "No such file or directory")
+                    }
+                )).register("cat", (function(e, t, n, r, o) {
+                        if (0 === n.length)
+                            return le.printError(t, "missing file operand");
+                        for (let e = 0; e < n.length; e++) {
+                            const r = path.resolve(ctx.__dirname, n[e])
+                                , o = path._getStorage(r);
+                            "error" !== o.type ? "dir" !== o.type ? le.println(o.data) : le.printError(t, r, "Is a directory") : le.printError(t, r, o.msg)
+                        }
+                    }
+                )).register("chat", (async function(e, t, n, r, o) {
+                        let l = !1;
+                        function _(e) {
+                            le.print("[0m"),
+                            l || "" !== e.trim() && (rp = new Replacement(e.trim()),
+                                rp.replaceAll("吗", ""),
+                                rp.replaceAll("吧", ""),
+                                rp.replaceAll("?", "!"),
+                                rp.replaceAll("？", "！"),
+                                rp.replaceAll("您的", "私の"),
+                                rp.replaceAll("私の", "您的"),
+                                rp.replaceAll("您", "我"),
+                                rp.replaceAll("你", "我"),
+                                rp.replaceAll("我", "你"),
+                                rp.replaceAll("哪", "那"),
+                                e = rp.apply(),
+                                le.println(`${e}`))
+                        }
+                        setTitle("跨时代的聊天系统（估值1个亿）"),
+                            this.once("exit", (function() {
+                                    l = !0,
+                                        recTitle(),
+                                        le._activePrompt.resolve()
+                                }
+                            )),
+                            await new Promise(((e,t)=>{
+                                    !async function t() {
+                                        if (l)
+                                            return e();
+                                        le.read("[90m> [0m[36m").then(_).then(t)
+                                    }()
+                                }
+                            ))
+                    }
+                )),
+                applyAutoComplete(le),
+                await sleep(800),
+                term.writeln(WELCOME_TEXT),
+                readInput(),
+                le.detach(),
+                await sleep(200),
+                le.attach(),
+                await sleep(200)
+        }
+    ).call({});
+</script>
+</body>
+</html>

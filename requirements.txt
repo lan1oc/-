@@ -1,0 +1,6 @@
+Flask
+numpy
+snowland-smx
+mysql-connector-python
+Flask-SocketIO
+pycryptodomex

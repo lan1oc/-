@@ -1,0 +1,44 @@
+body { margin:0;}
+canvas{
+  position: absolute;
+  top:0;
+  left:0;
+  z-index:-1;
+}
+#homeView {
+	width: auto;
+   -webkit-animation:fadeInUp 2s; /* Safari & Chrome */
+  animation:fadeInUp 2s;
+}
+.layout-homepage {
+	height: auto;
+	overflow-x: hidden;
+	overflow-y: hidden;
+	-webkit-perspective: 500px;
+	-moz-perspective: 500px;
+	perspective: 500px;
+	width: 100%;
+}
+.layout-homepage .slideshow {
+	height: auto;
+}
+.layout-homepage .slideshow .item {
+margin-top: 20%;
+}
+.visual {
+	display: block;
+    margin: 0 auto;
+    width: 145px;
+    height: 72px;
+}
+
+@-webkit-keyframes fadeInUp{
+  0%{
+    opacity: 0;
+    -webkit-transform: translateY(80px);
+  }
+  100%{
+    opacity: 1;
+    -webkit-transform: translateY(0);
+  }
+}

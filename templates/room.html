@@ -1,0 +1,284 @@
+{% extends 'base.html' %}{% block content %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.1/css/all.min.css">
+  <style>
+    body {
+      display: flex;
+      height: 100vh;
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #36393f;
+      color: #ffffff;
+      align-items: flex-start; /* 使内容顶部对齐 */
+    }
+
+    .message-box {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      overflow: hidden;
+      margin-right: 10px; /* 添加间隔 */
+    }
+
+    h2, h3 {
+      background-color: #2f3136;
+      padding: 10px;
+      margin: 0;
+      border-bottom: 1px solid #202225;
+    }
+
+    .messages {
+      flex-grow: 1;
+      padding: 20px;
+      overflow-y: scroll;
+      background: #36393f;
+    }
+
+    .text {
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #40444b;
+      border-radius: 5px;
+    }
+
+    .text strong {
+      color: #7289da;
+    }
+
+    .text .muted {
+      float: right;
+      color: #72767d;
+      font-size: 12px;
+    }
+
+    .inputs {
+      display: flex;
+      padding: 10px;
+      background-color: #40444b;
+      border-top: 1px solid #202225;
+    }
+
+    .inputs input[type="text"] {
+      flex-grow: 1;
+      padding: 10px;
+      margin-right: 10px;
+      border: none;
+      background-color: #2f3136;
+      color: #dcddde;
+    }
+
+    .inputs button {
+      padding: 10px 20px;
+      border: none;
+      background: transparent;
+      border: 0;
+      outline: none;
+      color: white;
+      cursor: pointer;
+    }
+
+    .online-users {
+      width: 200px;
+      background-color: #2f3136;
+      border-left: 1px solid #202225;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .user-list {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding: 10px;
+    }
+
+    .btn {
+      display: block;
+      color: #03e9f4;
+      overflow: hidden;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      left: 35%;
+    }
+
+    .btn:hover {
+      border-radius: 5px;
+      color: #fff;
+      background: #03e9f4;
+      box-shadow: 0 0 5px 0 #03e9f4, 0 0 25px 0 #03e9f4, 0 0 50px 0 #03e9f4, 0 0 100px 0 #03e9f4;
+      transition: all 1s linear;
+    }
+
+    .btn>span {
+      position: absolute;
+    }
+
+    .btn>span:nth-child(1) {
+      width: 100%;
+      height: 2px;
+      background: -webkit-linear-gradient(left, transparent, #03e9f4);
+      left: -100%;
+      top: 0px;
+      animation: line1 1s linear infinite;
+    }
+
+    @keyframes line1 {
+      50%, 100% {
+        left: 100%;
+      }
+    }
+
+    .btn>span:nth-child(2) {
+      width: 2px;
+      height: 100%;
+      background: -webkit-linear-gradient(top, transparent, #03e9f4);
+      right: 0px;
+      top: -100%;
+      animation: line2 1s 0.25s linear infinite;
+    }
+
+    @keyframes line2 {
+      50%, 100% {
+        top: 100%;
+      }
+    }
+
+    .btn>span:nth-child(3) {
+      width: 100%;
+      height: 2px;
+      background: -webkit-linear-gradient(left, #03e9f4, transparent);
+      left: 100%;
+      bottom: 0px;
+      animation: line3 1s 0.75s linear infinite;
+    }
+
+    @keyframes line3 {
+      50%, 100% {
+        left: -100%;
+      }
+    }
+
+    .btn>span:nth-child(4) {
+      width: 2px;
+      height: 100%;
+      background: -webkit-linear-gradient(top, transparent, #03e9f4);
+      left: 0px;
+      top: 100%;
+      animation: line4 1s 1s linear infinite;
+    }
+
+    /* 添加样式用于固定canvas */
+    #bg-canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      pointer-events: none; /* 防止canvas阻挡点击事件 */
+      z-index: -1; /* 将画布放置在最底层 */
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+  </style>
+  <script src="/static/jquery-3.7.1.min.js"></script>
+  <script src="/static/1.js"></script>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<script type="text/javascript">
+  $(function() {
+    //绘制背景
+    canvasBg.init({ type: 1 });
+  });
+</script>
+<div class="message-box">
+  <h2>聊天室: {{code}}</h2>
+  <div class="messages" id="messages"></div>
+  <div class="inputs">
+    <input type="text" placeholder="请在此处输入你的消息" name="message" id="message"/>
+    <button type="button" name="send" id="send-btn" class="btn" onClick="sendMessage()">发送</button>
+  </div>
+</div>
+<div class="online-users">
+  <h3>在线人数: <span id="user-count">{{count}}</span></h3>
+  <h3>在线用户: <span id="user-list">{{list}}</span></h3>
+</div>
+<script src="/static/socket.io.js"></script>
+<script type="text/javascript">
+  var socketio = io();
+  const messages = document.getElementById("messages");
+  const userCount = document.getElementById("user-count");
+  const userList = document.getElementById("user-list");
+  socketio.on("Count", (count) => {
+    console.log("Received Count event with data:", count); // 添加调试信息到控制台
+    try {
+      userCount.textContent = count;
+    } catch (error) {
+      console.error("Error updating userCount:", error); // 错误处理：捕获错误并输出到控制台
+    }
+  });
+
+  socketio.on("List", (list) => {
+    console.log("Received List event with data:", list); // 添加调试信息到控制台
+    try {
+      userList.textContent = list;
+    } catch (error) {
+      console.error("Error updating userList:", error); // 错误处理：捕获错误并输出到控制台
+    }
+  });
+
+  const createMessage = (name, msg) => {
+    const content = `
+                <div class="text">
+                    <span>
+                        <strong>${name}</strong>: ${msg}
+                    </span>
+                    <span class="muted">
+                        ${new Date().toLocaleString()}
+                    </span>
+                </div>
+            `;
+    messages.innerHTML += content;
+  };
+
+  const updateUserList = (users) => {
+    userCount.textContent = users.length;
+    userList.innerHTML = '';
+    users.forEach(user => {
+      const userElement = document.createElement("div");
+      userElement.className = "user";
+      userElement.textContent = user.name;
+      userList.appendChild(userElement);
+    });
+  };
+
+  socketio.on("message", (data) => {
+    createMessage(data.name, data.message);
+  });
+
+  socketio.on("updateUserList", (data) => {
+    document.getElementById("user-count").textContent = data.count;
+  });
+
+
+  const sendMessage = () => {
+    const message = document.getElementById("message");
+    if (message.value === "") return;
+    socketio.emit("message", { data: message.value });
+    message.value = "";
+  };
+</script>
+{% for msg in messages %}
+<script type="text/javascript">
+  createMessage("{{msg.name}}", "{{msg.message}}");
+</script>
+{% endfor %}
+</body>
+</html>
+{% endblock %}
