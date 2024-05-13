@@ -16,7 +16,7 @@ docker-compose up --build -d
 ```
 # 预览
 ## 首页
-![](.\img\图片1.png)
+![](/img/图片1.png)
 ## 登录
 ![2](.\img\图片2.png)
 
