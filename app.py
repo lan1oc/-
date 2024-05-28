@@ -313,4 +313,4 @@ def update_user_list(room):
         app.logger.info("Online users in room %s: %s", room, users_list)
 
 if __name__ == "__main__":
-    socketio.run(app, port=404, debug=True)
+    socketio.run(app, host='0.0.0.0' ,debug=True, allow_unsafe_werkzeug=True)
