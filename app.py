@@ -7,6 +7,7 @@ import logging
 from string import ascii_uppercase
 from sm2 import *
 from sm2_k import *
+import time
 
 app = Flask(__name__)
 app.logger.setLevel(logging.INFO)
@@ -18,28 +19,26 @@ def sm4_encode(key, data):
     sm4Alg = CryptSM4()  # 实例化sm4
     sm4Alg.set_key(key.encode(), SM4_ENCRYPT)  # 设置密钥
     dateStr = str(data)
-    app.logger.info("明文:%s", dateStr);
+    app.logger.info("明文:%s", dateStr)
     enRes = sm4Alg.crypt_ecb(dateStr.encode())  # 开始加密,bytes类型，ecb模式
     enHexStr = enRes.hex()
-    app.logger.info("密文:%s", enHexStr);
-    return enHexStr # 返回十六进制值
+    app.logger.info("密文:%s", enHexStr)
+    return enHexStr  # 返回十六进制值
 
-#SM4解密
+# SM4解密
 def sm4_decode(key, data):
     sm4Alg = CryptSM4()  # 实例化sm4
     sm4Alg.set_key(key.encode(), SM4_DECRYPT)  # 设置密钥
     deRes = sm4Alg.crypt_ecb(bytes.fromhex(data))  # 开始解密。十六进制类型,ecb模式
     deHexStr = deRes.decode()
-    app.logger.info("解密后明文:%s", deRes);
-    app.logger.info("解密后明文hex:%s", deHexStr);
+    app.logger.info("解密后明文:%s", deRes)
+    app.logger.info("解密后明文hex:%s", deHexStr)
     return deHexStr
-
-app = Flask(__name__)
 
 # 设置密钥用于 session
 app.secret_key = 'lan1oc'
 
-#将套接字与flask应用关联
+# 将套接字与flask应用关联
 socketio = SocketIO(app)
 
 # 存储聊天室信息的字典，包括聊天室成员数量和消息列表
@@ -60,24 +59,24 @@ def generate_unique_code(length):
 
     return code
 
-# 连接MySQL数据库
-db_host = os.getenv('DB_HOST', 'localhost')
+# 获取MySQL数据库连接
+def get_db_connection():
+    return mysql.connector.connect(
+        host=os.getenv('DB_HOST', 'localhost'),
+        user=os.getenv('DB_USER', 'root'),
+        password=os.getenv('DB_PASSWORD', 'root'),
+        database=os.getenv('DB_DATABASE', 'test')
+    )
 
 # 创建数据库和表结构
 def create_database_and_tables():
-    global db  # 引用全局变量 db
     while True:
         try:
-            db = mysql.connector.connect(
-                host=db_host,
-                user=os.getenv('DB_USER', 'root'),
-                password=os.getenv('DB_PASSWORD', 'root'),
-                database=os.getenv('DB_DATABASE', 'test')
-            )
+            db = get_db_connection()
             app.logger.info("Database connection successful!")
             break  # 如果连接成功，跳出循环
         except mysql.connector.Error as err:
-            app.logger.info("Error connecting to MySQL: %s",err)
+            app.logger.info("Error connecting to MySQL: %s", err)
             app.logger.info("Waiting for 1 second before trying again.")
             time.sleep(7)  # 如果连接失败，等待1秒后再次尝试
 
@@ -101,6 +100,9 @@ def create_database_and_tables():
         cursor.execute(
             "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), password VARCHAR(255))")
         db.commit()
+
+    cursor.close()
+    db.close()
 
 # 初始化数据库和表结构
 create_database_and_tables()
@@ -126,34 +128,38 @@ def show_register_form():
 # 处理注册请求
 @app.route('/register', methods=['POST'])
 def register():
-    global db  # 引用全局变量 db
-    if db is None:
-        create_database_and_tables()  # 如果数据库未连接，再次尝试创建数据库和表
-
-    cursor = db.cursor()
-
     data = request.form
     username = data.get('username')
     password = data.get('password')
 
-    # 检查用户名是否已存在
-    check_query = "SELECT * FROM users WHERE username = %s"
-    cursor.execute(check_query, (username,))
-    existing_user = cursor.fetchone()
+    try:
+        db = get_db_connection()
+        cursor = db.cursor()
 
-    if existing_user:
-        jsonify({"message": "注册失败"}), 401
-        return render_template("register.html", error="用户名已存在.")
-    # 在数据库中插入新用户信息
-    insert_query = "INSERT INTO users (username, password) VALUES (%s, %s)"
-    cursor = db.cursor()
-    cursor.execute(insert_query, (username, password))
-    db.commit()
+        # 检查用户名是否已存在
+        check_query = "SELECT * FROM users WHERE username = %s"
+        cursor.execute(check_query, (username,))
+        existing_user = cursor.fetchone()
 
-    # 自动登录并跳转到 chat 路由
-    session['username'] = username
-    jsonify({"message": "注册成功", "redirect": "/chat"})
-    return redirect('/chat')
+        if existing_user:
+            return render_template("register.html", error="用户名已存在.")
+        
+        # 在数据库中插入新用户信息
+        insert_query = "INSERT INTO users (username, password) VALUES (%s, %s)"
+        cursor.execute(insert_query, (username, password))
+        db.commit()
+
+        # 自动登录并跳转到 chat 路由
+        session['username'] = username
+        return redirect('/chat')
+    
+    except mysql.connector.Error as err:
+        app.logger.error("Database error: %s", err)
+        return render_template("register.html", error="注册失败，请稍后再试。")
+    
+    finally:
+        cursor.close()
+        db.close()
 
 # 登录路由，返回登录页面
 @app.route('/login', methods=['GET'])
@@ -167,27 +173,31 @@ def login():
     username = data.get('username')
     password = data.get('password')
 
-    # 查询数据库验证用户信息
-    select_query = "SELECT * FROM users WHERE username = %s AND password = %s"
-    cursor = db.cursor()
-    cursor.execute(select_query, (username, password))
-    user = cursor.fetchone()
+    try:
+        db = get_db_connection()
+        cursor = db.cursor()
 
-    if user:
-        # 登录成功，设置会话并跳转到 chat 路由
-        session['username'] = username
+        # 查询数据库验证用户信息
+        select_query = "SELECT * FROM users WHERE username = %s AND password = %s"
+        cursor.execute(select_query, (username, password))
+        user = cursor.fetchone()
 
+        if user:
+            # 登录成功，设置会话并跳转到 chat 路由
+            session['username'] = username
+            return redirect('/chat')
+        else:
+            return render_template("login.html", error="账户不存在。")
+    
+    except mysql.connector.Error as err:
+        app.logger.error("Database error: %s", err)
+        return render_template("login.html", error="登录失败，请稍后再试。")
+    
+    finally:
+        cursor.close()
+        db.close()
 
-        jsonify({"message": "登录成功", "redirect": "/chat"})
-        return redirect('/chat')
-
-    else:
-        # 登录失败，返回失败消息
-        jsonify({"message": "登录失败"}), 401
-        return render_template("login.html", error="账户不存在.")
-
-
-#聊天室主页
+# 聊天室主页
 @app.route("/chat", methods=["POST", "GET"])
 def home():
     # 获取会话中的用户名
@@ -204,33 +214,31 @@ def home():
         create = request.form.get("create", False)
 
         if not name:
-            jsonify({"message": "阿巴阿巴"}), 401
             return redirect('/')
 
-        if join != False and not code:
-            return render_template("home.html", error="请输入房号.", code=code, name=name)
+        if join and not code:
+            return render_template("home.html", error="请输入房号。", code=code, name=name)
 
         room = code
-        if create != False:
+        if create:
             room = generate_unique_code(4)
             rooms[room] = {"members": 0, "messages": [], "members_name": []}
         elif code not in rooms:
-            return render_template("home.html", error="聊天室不存在.", code=code, name=name)
+            return render_template("home.html", error="聊天室不存在。", code=code, name=name)
 
         session["room"] = room
         return redirect('/room')
 
     return render_template("home.html")
 
-#聊天室
+# 聊天室
 @app.route("/room")
 def room():
     name = session.get("username")
     room = session.get("room")
     if room is None or name is None or room not in rooms:
         return redirect(url_for("home"))
-    return render_template("room.html", code=room, messages=rooms[room]["messages"], count=rooms[room]["members"],list=rooms[room]["members_name"])
-
+    return render_template("room.html", code=room, messages=rooms[room]["messages"], count=rooms[room]["members"], list=rooms[room]["members_name"])
 
 @socketio.on("message")
 def message(data):
@@ -238,13 +246,13 @@ def message(data):
     if room not in rooms:
         return
     if rooms[room]["members"] > 1:
-    # 协商的密钥（sm4）
+        # 协商的密钥（sm4）
         global key
 
-    #单人时的测试密钥
-    key="cb851b18e4b6b239414f5a7c24a72536"
+    # 单人时的测试密钥
+    key = "cb851b18e4b6b239414f5a7c24a72536"
 
-    #sm2
+    # sm2
     SM2_PRIVATE_KEY1, SM2_PUBLIC_KEY1 = create_key_pair()
     sm2_crypt1 = CryptSM2(public_key=SM2_PUBLIC_KEY1, private_key=SM2_PRIVATE_KEY1)
 
@@ -254,84 +262,62 @@ def message(data):
     }
 
     # SM4加密消息
-    enHexRes = sm4_encode(key,str(data["data"]));
-    sm4_decode(key, enHexRes);
+    enHexRes = sm4_encode(key, str(data["data"]))
+    sm4_decode(key, enHexRes)
+    content["message"] = enHexRes
 
-    #sm2 签名
-    a = data["data"].encode('utf-8')
-    b = sm2_crypt1.sign_with_sm3(a)
-    app.logger.info("签名：%s", b)
-    app.logger.info("验证结果：%s", sm2_crypt1.verify_with_sm3(b, data["data"].encode('utf-8')))
+    # SM2签名
+    random_hex_str = random_hex(sm2_crypt1.para_len)
+    sign = sm2_crypt1.sign(enHexRes, random_hex_str)
+    app.logger.info("sign:%s", sign)
+    content["sign"] = sign
 
     send(content, to=room)
     rooms[room]["messages"].append(content)
-    app.logger.info("%s 说: %s", session.get('username'),data['data'])
 
 @socketio.on("connect")
 def connect(auth):
-    global key
+    username = session.get("username")
     room = session.get("room")
-    name = session.get("username")
-    rooms[room]["members_name"].append(name)
-    if not room or not name:
+
+    if not username or not room:
         return
+
     if room not in rooms:
         leave_room(room)
         return
 
     join_room(room)
-    send({"name": name, "message": "已加入聊天室"}, to=room)
+    send({"name": username, "message": "进入了聊天室"}, to=room)
     rooms[room]["members"] += 1
-    app.logger.info("%s 已加入聊天室 %s", name, room)
-    # 当房间内人数大于1时，开始进行密钥协商
-    if rooms[room]["members"] > 1:
-        members_name = rooms[room]["members_name"]
-        if rooms[room]["members"] == 2:
-            app.logger.info("双人协商")
-            a = SM2(ID=members_name[0])
-            b = SM2(ID=members_name[1])
-            key=test_SM2_agreement(a, b, True)
-        elif rooms[room]["members"] > 2:
-            app.logger.info("\n\n双人以上的协商\n")
-            n = rooms[room]["members"] // 2
-            # 取前 n 个成员名连接成字符串
-            a_part = ''.join(members_name[:n])
-            #print(a_part)
-            # 取从第 n 个成员名到最后一个成员名连接成字符串
-            b_part = ''.join(members_name[n:])
-            #print(b_part)
-            a = SM2(ID=a_part)
-            b = SM2(ID=b_part)
-            key = test_SM2_agreement(a, b, True)
+    rooms[room]["members_name"].append(username)
 
-    # 更新在线人数列表并发送给前端
     update_user_list(room)
-
-def update_user_list(room):
-    members_count = rooms[room]["members"]
-    members_name = rooms[room]["members_name"]
-    socketio.emit("Count", members_count, room=room)
-    socketio.emit("List", members_name, room=room)
+    app.logger.info("%s joined room %s", username, room)
 
 @socketio.on("disconnect")
 def disconnect():
+    username = session.get("username")
     room = session.get("room")
-    name = session.get("username")
     leave_room(room)
 
     if room in rooms:
-        # 如果用户在房间中，将其从 members_name 列表中删除
-        if name in rooms[room]["members_name"]:
-            rooms[room]["members_name"].remove(name)
         rooms[room]["members"] -= 1
+        rooms[room]["members_name"].remove(username)
         if rooms[room]["members"] <= 0:
             del rooms[room]
-        print()
 
-    send({"name": name, "message": "已离开房间"}, to=room)
+    send({"name": username, "message": "离开了聊天室"}, to=room)
     update_user_list(room)
-    app.logger.info("%s已离开房间 %s",name,room)
+    app.logger.info("%s disconnected from room %s", username, room)
 
+# 更新在线用户列表
+def update_user_list(room):
+    if room in rooms:
+        users_list = rooms[room]["members_name"]
+        users_count = rooms[room]["members"]
+        send({"count": users_count, "list": users_list}, to=room)
+        app.logger.info("Online users in room %s: %s", room, users_list)
 
-if __name__ == '__main__':
-    socketio.run(app, host='0.0.0.0' ,debug=True, allow_unsafe_werkzeug=True)
+if __name__ == "__main__":
+    socketio.run(app, port=404, debug=True)
