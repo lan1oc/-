@@ -78,30 +78,28 @@ def create_database_and_tables():
         except mysql.connector.Error as err:
             app.logger.info("Error connecting to MySQL: %s", err)
             app.logger.info("Waiting for 1 second before trying again.")
-            time.sleep(7)  # 如果连接失败，等待1秒后再次尝试
+            time.sleep(7)  # 如果连接失败，等待后再次尝试
 
-    cursor = db.cursor()
+    with db.cursor() as cursor:
+        # 检查是否存在 test 数据库，如果不存在则创建
+        cursor.execute("SHOW DATABASES")
+        databases = cursor.fetchall()
+        databases = [db[0] for db in databases]
 
-    # 检查是否存在 test 数据库，如果不存在则创建
-    cursor.execute("SHOW DATABASES")
-    databases = cursor.fetchall()
-    databases = [db[0] for db in databases]
+        if 'test' not in databases:
+            cursor.execute("CREATE DATABASE test")
 
-    if 'test' not in databases:
-        cursor.execute("CREATE DATABASE test")
+        # 切换到 test 数据库
+        cursor.execute("USE test")
 
-    # 切换到 test 数据库
-    cursor.execute("USE test")
+        # 检查是否存在 users 表，如果不存在则创建
+        cursor.execute("SHOW TABLES LIKE 'users'")
+        tables = cursor.fetchall()
+        if not tables:
+            cursor.execute(
+                "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), password VARCHAR(255))")
+            db.commit()
 
-    # 检查是否存在 users 表，如果不存在则创建
-    cursor.execute("SHOW TABLES LIKE 'users'")
-    tables = cursor.fetchall()
-    if not tables:
-        cursor.execute(
-            "CREATE TABLE users (id INT AUTO_INCREMENT PRIMARY KEY, username VARCHAR(255), password VARCHAR(255))")
-        db.commit()
-
-    cursor.close()
     db.close()
 
 # 初始化数据库和表结构
@@ -134,20 +132,19 @@ def register():
 
     try:
         db = get_db_connection()
-        cursor = db.cursor()
+        with db.cursor() as cursor:
+            # 检查用户名是否已存在
+            check_query = "SELECT * FROM users WHERE username = %s"
+            cursor.execute(check_query, (username,))
+            existing_user = cursor.fetchone()
 
-        # 检查用户名是否已存在
-        check_query = "SELECT * FROM users WHERE username = %s"
-        cursor.execute(check_query, (username,))
-        existing_user = cursor.fetchone()
-
-        if existing_user:
-            return render_template("register.html", error="用户名已存在.")
-        
-        # 在数据库中插入新用户信息
-        insert_query = "INSERT INTO users (username, password) VALUES (%s, %s)"
-        cursor.execute(insert_query, (username, password))
-        db.commit()
+            if existing_user:
+                return render_template("register.html", error="用户名已存在.")
+            
+            # 在数据库中插入新用户信息
+            insert_query = "INSERT INTO users (username, password) VALUES (%s, %s)"
+            cursor.execute(insert_query, (username, password))
+            db.commit()
 
         # 自动登录并跳转到 chat 路由
         session['username'] = username
@@ -158,7 +155,6 @@ def register():
         return render_template("register.html", error="注册失败，请稍后再试。")
     
     finally:
-        cursor.close()
         db.close()
 
 # 登录路由，返回登录页面
@@ -175,26 +171,24 @@ def login():
 
     try:
         db = get_db_connection()
-        cursor = db.cursor()
+        with db.cursor() as cursor:
+            # 查询数据库验证用户信息
+            select_query = "SELECT * FROM users WHERE username = %s AND password = %s"
+            cursor.execute(select_query, (username, password))
+            user = cursor.fetchone()
 
-        # 查询数据库验证用户信息
-        select_query = "SELECT * FROM users WHERE username = %s AND password = %s"
-        cursor.execute(select_query, (username, password))
-        user = cursor.fetchone()
-
-        if user:
-            # 登录成功，设置会话并跳转到 chat 路由
-            session['username'] = username
-            return redirect('/chat')
-        else:
-            return render_template("login.html", error="账户不存在。")
+            if user:
+                # 登录成功，设置会话并跳转到 chat 路由
+                session['username'] = username
+                return redirect('/chat')
+            else:
+                return render_template("login.html", error="账户不存在。")
     
     except mysql.connector.Error as err:
         app.logger.error("Database error: %s", err)
         return render_template("login.html", error="登录失败，请稍后再试。")
     
     finally:
-        cursor.close()
         db.close()
 
 # 聊天室主页
@@ -263,7 +257,6 @@ def message(data):
 
     # SM4加密消息
     enHexRes = sm4_encode(key, str(data["data"]))
-    sm4_decode(key, enHexRes)
     content["message"] = enHexRes
 
     # SM2签名
